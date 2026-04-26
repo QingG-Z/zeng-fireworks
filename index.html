@@ -141,15 +141,18 @@ class Particle {
     this.tx = x; this.ty = y;
     this.color = color;
     this.size  = rand(2.5, 4.5);
-    const angle = rand(0, Math.PI*2);
+    // 径向扩散角度（从中心向外）
+    this.burstAngle = rand(0, Math.PI*2);
     const speed = rand(CONFIG.burstSpeed * 0.17, CONFIG.burstSpeed);
-    this.vx = Math.cos(angle)*speed;
-    this.vy = Math.sin(angle)*speed;
+    this.vx = Math.cos(this.burstAngle)*speed;
+    this.vy = Math.sin(this.burstAngle)*speed;
     this.alpha = 1;
     this.state = 'idle';
     this.gatherT = 0;
     this.burstX  = x; this.burstY = y;
     this.colorTarget = color;
+    // 记录散开半径，用于反向聚合
+    this.burstDist = 0;
   }
 
   startBurst(){
@@ -169,14 +172,17 @@ class Particle {
     if(this.state==='idle') return;
 
     if(this.state==='burst'){
-      this.vx *= 0.93;
-      this.vy *= 0.93;
-      this.vy += 0.18;
+      // 纯摩擦力衰减，无重力，保持圆状扩散
+      this.vx *= 0.965;
+      this.vy *= 0.965;
       this.x += this.vx;
       this.y += this.vy;
-      if(this.x<0||this.x>W){ this.vx*=-0.5; this.x=Math.max(0,Math.min(W,this.x)); }
-      if(this.y>H){ this.vy*=-0.4; this.y=H; }
-      if(Math.abs(this.vx)<0.3 && Math.abs(this.vy)<0.3){
+      // 记录实时散开距离
+      this.burstDist = Math.hypot(this.x - this.ox, this.y - this.oy);
+      // 边界弹回
+      if(this.x<0||this.x>W){ this.vx*=-0.6; this.x=Math.max(0,Math.min(W,this.x)); }
+      if(this.y<0||this.y>H){ this.vy*=-0.6; this.y=Math.max(0,Math.min(H,this.y)); }
+      if(Math.abs(this.vx)<0.2 && Math.abs(this.vy)<0.2){
         this.burstX=this.x; this.burstY=this.y;
       }
     }
@@ -187,14 +193,31 @@ class Particle {
         this.state='gather';
         this.gatherT=0;
         this.sx=this.x; this.sy=this.y;
+        // 计算当前散开方向角（从散开位置到中心），用于反向聚合
+        this.gatherAngle = Math.atan2(this.sy - this.ty, this.sx - this.tx);
       }
     }
 
     if(this.state==='gather'){
       this.gatherT = Math.min(this.gatherT + CONFIG.gatherSpeed, 1);
       const ease = 1-Math.pow(1-this.gatherT,3);
-      this.x = lerp(this.sx, this.tx, ease);
-      this.y = lerp(this.sy, this.ty, ease);
+      // 先沿径向方向收缩（前60%），再精确定位到目标（后40%）
+      if(this.gatherT < 0.6){
+        const radialEase = ease / 0.6;
+        // 从散开位置沿反方向径向收缩
+        const totalDist = Math.hypot(this.sx - this.tx, this.sy - this.ty);
+        const shrink = radialEase * radialEase * totalDist;
+        this.x = this.sx - Math.cos(this.gatherAngle) * shrink;
+        this.y = this.sy - Math.sin(this.gatherAngle) * shrink;
+      } else {
+        // 平滑过渡到精确目标位置
+        const finalEase = (this.gatherT - 0.6) / 0.4;
+        const smoothEase = 1-Math.pow(1-finalEase,2);
+        const radialX = this.sx - Math.cos(this.gatherAngle) * Math.hypot(this.sx-this.tx,this.sy-this.ty);
+        const radialY = this.sy - Math.sin(this.gatherAngle) * Math.hypot(this.sx-this.tx,this.sy-this.ty);
+        this.x = lerp(radialX, this.tx, smoothEase);
+        this.y = lerp(radialY, this.ty, smoothEase);
+      }
       this.alpha = lerp(0.6, 1, ease);
     }
   }
