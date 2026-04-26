@@ -443,44 +443,106 @@ function startBurst(){
 }
 
 function startGather(){
-  phase='gather';
-
-  let targetPts = sampleText(CONFIG.revealText);
-  if(targetPts.length>CONFIG.maxParticles){
-    const step=targetPts.length/CONFIG.maxParticles;
-    const arr=[];
-    for(let i=0;i<CONFIG.maxParticles;i++) arr.push(targetPts[Math.floor(i*step)]);
-    targetPts=arr;
-  }
-
-  const shuffled=[...particles].sort(()=>Math.random()-0.5);
-
-  for(let i=0;i<shuffled.length;i++){
-    if(i<targetPts.length){
-      const [tx,ty]=targetPts[i%targetPts.length];
-      shuffled[i].startGather(tx, ty, randI(0,60));
-    } else {
-      shuffled[i].alpha=0;
-      shuffled[i].state='dead';
-    }
-  }
-
-  if(targetPts.length>shuffled.length){
-    for(let i=shuffled.length;i<targetPts.length;i++){
-      const [tx,ty]=targetPts[i];
-      const p=new Particle(rand(0,W),rand(0,H),pickRedDominantColor());
-      p.sx=p.x;p.sy=p.y;
-      p.tx=tx;p.ty=ty;
-      p.state='gather';p.gatherT=0;
-      p.colorTarget=pickRedDominantColor();
-      particles.push(p);
-    }
-  }
+  phase='reveal';
+  revealT = 0;
 
   setTimeout(()=>{
     fireworksActive=true;
     fireworksTimer=0;
   },1500);
+}
+
+// ============================================================
+//  揭示文字：艺术字体渐现
+// ============================================================
+let revealT = 0;
+
+function drawRevealText(){
+  const text = CONFIG.revealText;
+  revealT += 0.012;
+  if(revealT > 1) revealT = 1;
+
+  // 淡入 + 缩放弹性动画
+  const fadeIn = 1 - Math.pow(1 - revealT, 3);
+  const scale = 0.6 + 0.4 * (1 - Math.pow(1 - revealT, 4));
+  const bounce = scale > 0.98 ? 1.0 : scale;
+
+  ctx.save();
+  ctx.globalAlpha = fadeIn;
+  ctx.translate(W/2, H/2);
+  ctx.scale(bounce, bounce);
+  ctx.translate(-W/2, -H/2);
+
+  // 自适应字号
+  const charCount = text.length;
+  let fs;
+  if(charCount <= 2){
+    fs = Math.min(W,H)*0.45;
+  } else {
+    fs = Math.min(W * 0.78 / charCount, H * 0.18);
+  }
+  fs = Math.max(16, fs);
+
+  const fontStr = `900 ${fs}px "Arial Black","华文圆体","Microsoft YaHei",sans-serif`;
+  ctx.font = fontStr;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+
+  // 外层光晕
+  ctx.save();
+  ctx.shadowBlur  = 50;
+  ctx.shadowColor = 'rgba(230,57,70,0.4)';
+  ctx.lineWidth   = fs*0.12;
+  ctx.strokeStyle = `rgba(230,57,70,${0.15*fadeIn})`;
+  ctx.lineJoin    = 'round';
+  ctx.strokeText(text, W/2, H/2);
+  ctx.restore();
+
+  // 充气轮廓
+  for(let i=5;i>=1;i--){
+    ctx.save();
+    ctx.lineWidth   = fs*0.06*i;
+    ctx.lineJoin    = 'round';
+    ctx.lineCap     = 'round';
+    const r=230-i*10, g=57-i*5, b=70+i*15;
+    ctx.strokeStyle = `rgba(${r},${g},${b},${(0.05+i*0.025)*fadeIn})`;
+    ctx.shadowBlur  = 12*i;
+    ctx.shadowColor = `rgba(230,57,70,${0.12*fadeIn})`;
+    ctx.strokeText(text, W/2, H/2);
+    ctx.restore();
+  }
+
+  // 渐变填充
+  const grad = ctx.createLinearGradient(W/2-fs*0.5, H/2-fs*0.4, W/2+fs*0.5, H/2+fs*0.4);
+  grad.addColorStop(0,   '#e63946');
+  grad.addColorStop(0.2, '#d62828');
+  grad.addColorStop(0.4, '#b5179e');
+  grad.addColorStop(0.6, '#f72585');
+  grad.addColorStop(0.8, '#ff6b6b');
+  grad.addColorStop(1,   '#e63946');
+  ctx.save();
+  ctx.fillStyle = grad;
+  ctx.shadowBlur  = 35;
+  ctx.shadowColor = `rgba(230,57,70,${0.6*fadeIn})`;
+  ctx.fillText(text, W/2, H/2);
+  ctx.restore();
+
+  // 高光
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const hl = ctx.createRadialGradient(
+    W/2-fs*0.15, H/2-fs*0.2, 0,
+    W/2-fs*0.15, H/2-fs*0.2, fs*0.3
+  );
+  hl.addColorStop(0,`rgba(255,200,200,${0.4*fadeIn})`);
+  hl.addColorStop(1,'rgba(255,200,200,0)');
+  ctx.fillStyle=hl;
+  ctx.beginPath();
+  ctx.ellipse(W/2-fs*0.15, H/2-fs*0.2, fs*0.25, fs*0.1, -0.5, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.restore();
 }
 
 // ============================================================
@@ -496,8 +558,15 @@ function loop(){
     return;
   }
 
-  ctx.fillStyle='rgba(255,255,255,0.2)';
-  ctx.fillRect(0,0,W,H);
+  if(phase==='reveal'){
+    // reveal 阶段：先画白底，再画艺术字体，再画烟花
+    ctx.fillStyle='rgba(255,255,255,1)';
+    ctx.fillRect(0,0,W,H);
+    drawRevealText();
+  } else {
+    ctx.fillStyle='rgba(255,255,255,0.2)';
+    ctx.fillRect(0,0,W,H);
+  }
 
   if(fireworksActive){
     fireworksTimer++;
@@ -519,7 +588,16 @@ function loop(){
     if(sparks[i].alpha<=0) sparks.splice(i,1);
   }
 
-  particles.forEach(p=>{ p.update(); p.draw(); });
+  // 粒子在 burst 阶段正常绘制，reveal 阶段逐渐消散
+  if(phase==='burst'){
+    particles.forEach(p=>{ p.update(); p.draw(); });
+  } else if(phase==='reveal' && revealT < 0.5){
+    // 过渡阶段：粒子快速淡出
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - revealT*2);
+    particles.forEach(p=>{ p.alpha = Math.max(0, p.alpha - 0.02); p.update(); p.draw(); });
+    ctx.restore();
+  }
 }
 loop();
 
