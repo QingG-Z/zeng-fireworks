@@ -7,7 +7,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{
-  background:#06061a;
+  background:#ffffff;
   overflow:hidden;
   width:100vw;height:100vh;
   display:flex;align-items:center;justify-content:center;
@@ -15,7 +15,7 @@ body{
 canvas{position:fixed;top:0;left:0;width:100%;height:100%;}
 #hint{
   position:fixed;bottom:28px;left:50%;transform:translateX(-50%);
-  color:rgba(255,255,255,0.22);font-size:14px;letter-spacing:3px;
+  color:rgba(0,0,0,0.18);font-size:14px;letter-spacing:3px;
   font-family:"Microsoft YaHei",sans-serif;
   z-index:99;transition:opacity 1s;pointer-events:none;
 }
@@ -70,10 +70,19 @@ let phase = 'idle';
 const rand  = (a,b)=>Math.random()*(b-a)+a;
 const randI = (a,b)=>Math.floor(rand(a,b));
 const lerp  = (a,b,t)=>a+(b-a)*t;
-const COLORS = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b',
-                '#cc5de8','#f06595','#74c0fc','#ffe066','#a9e34b',
-                '#63e6be','#f783ac','#ffffff','#ffa8a8','#d0bfff',
-                '#ff9f43','#ee5a24','#0652DD','#9980FA','#FDA7DF'];
+const COLORS = [
+  '#e63946','#d62828','#c1121f','#ef233c','#ff4444',
+  '#e63946','#d62828','#ff6b6b','#b5179e','#f72585',
+  '#ffd93d','#6bcb77','#4d96ff','#ff922b','#cc5de8',
+  '#f06595','#74c0fc','#ffe066','#9980FA','#FDA7DF'
+];
+// 50% 红色 + 50% 其他颜色
+const RED_COLORS = ['#e63946','#d62828','#c1121f','#ef233c','#ff4444','#ff6b6b','#b5179e','#f72585','#ee5a24','#e17055'];
+function pickRedDominantColor(){
+  return Math.random() < 0.5
+    ? RED_COLORS[randI(0, RED_COLORS.length)]
+    : COLORS[randI(0, COLORS.length)];
+}
 
 // ============================================================
 //  离屏 Canvas 采样文字像素点（通用，支持任意文本）
@@ -145,7 +154,7 @@ class Particle {
     this.gatherTimer = 0;
     this.state  = 'pregather';
     this.tx = tx; this.ty = ty;
-    this.colorTarget = COLORS[randI(0,COLORS.length)];
+    this.colorTarget = pickRedDominantColor();
   }
 
   update(){
@@ -236,7 +245,7 @@ class FireworkShell {
     this.y=H+10;
     this.tx=this.x+(rand(-1,1)*200);
     this.ty=rand(H*0.05,H*0.5);
-    this.color=COLORS[randI(0,COLORS.length)];
+    this.color=pickRedDominantColor();
     const angle=Math.atan2(this.ty-this.y,this.tx-this.x);
     const spd=rand(12,18);
     this.vx=Math.cos(angle)*spd;
@@ -263,7 +272,7 @@ class FireworkShell {
   }
 }
 function explode(x,y,n=110){
-  const c1=COLORS[randI(0,COLORS.length)],c2=COLORS[randI(0,COLORS.length)];
+  const c1=pickRedDominantColor(),c2=pickRedDominantColor();
   for(let i=0;i<n;i++){
     const a=rand(0,Math.PI*2),spd=rand(2,9);
     sparks.push(new Spark(x,y,Math.random()>0.4?c1:c2,
@@ -309,10 +318,10 @@ function drawMain(){
 
   // 最外层光晕
   ctx.save();
-  ctx.shadowBlur  = 60;
-  ctx.shadowColor = 'rgba(200,150,255,0.6)';
-  ctx.lineWidth   = fs*0.18;
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.shadowBlur  = 40;
+  ctx.shadowColor = 'rgba(230,57,70,0.3)';
+  ctx.lineWidth   = fs*0.15;
+  ctx.strokeStyle = 'rgba(230,57,70,0.1)';
   ctx.lineJoin    = 'round';
   ctx.strokeText(text, W/2, H/2);
   ctx.restore();
@@ -323,25 +332,25 @@ function drawMain(){
     ctx.lineWidth   = fs*0.08*i;
     ctx.lineJoin    = 'round';
     ctx.lineCap     = 'round';
-    const r=255-i*15, g=100+i*20, b=255-i*10;
-    ctx.strokeStyle = `rgba(${r},${g},${b},${0.05+i*0.04})`;
-    ctx.shadowBlur  = 20*i;
-    ctx.shadowColor = `rgba(180,100,255,0.3)`;
+    const r=230-i*10, g=57-i*5, b=70+i*15;
+    ctx.strokeStyle = `rgba(${r},${g},${b},${0.06+i*0.03})`;
+    ctx.shadowBlur  = 15*i;
+    ctx.shadowColor = `rgba(230,57,70,0.15)`;
     ctx.strokeText(text, W/2, H/2);
     ctx.restore();
   }
 
   // 渐变填充
   const grad = ctx.createLinearGradient(W/2-fs*0.5, H/2-fs*0.5, W/2+fs*0.5, H/2+fs*0.5);
-  grad.addColorStop(0,   '#ff9ff3');
-  grad.addColorStop(0.25,'#ffeaa7');
-  grad.addColorStop(0.5, '#a29bfe');
-  grad.addColorStop(0.75,'#fd79a8');
-  grad.addColorStop(1,   '#74b9ff');
+  grad.addColorStop(0,   '#e63946');
+  grad.addColorStop(0.25,'#d62828');
+  grad.addColorStop(0.5, '#b5179e');
+  grad.addColorStop(0.75,'#f72585');
+  grad.addColorStop(1,   '#ff6b6b');
   ctx.save();
   ctx.fillStyle = grad;
   ctx.shadowBlur  = 30;
-  ctx.shadowColor = 'rgba(255,180,255,0.8)';
+  ctx.shadowColor = 'rgba(230,57,70,0.6)';
   ctx.fillText(text, W/2, H/2);
   ctx.restore();
 
@@ -352,8 +361,8 @@ function drawMain(){
     W/2-fs*0.12, H/2-fs*0.18, 0,
     W/2-fs*0.12, H/2-fs*0.18, fs*0.25
   );
-  hl.addColorStop(0,'rgba(255,255,255,0.55)');
-  hl.addColorStop(1,'rgba(255,255,255,0)');
+  hl.addColorStop(0,'rgba(255,200,200,0.45)');
+  hl.addColorStop(1,'rgba(255,200,200,0)');
   ctx.fillStyle=hl;
   ctx.beginPath();
   ctx.ellipse(W/2-fs*0.12, H/2-fs*0.18, fs*0.2, fs*0.12, -0.5, 0, Math.PI*2);
@@ -384,10 +393,12 @@ function buildParticlesFromMain(){
     pts=arr;
   }
 
-  const cList = ['#ff9ff3','#ffeaa7','#a29bfe','#fd79a8','#74b9ff',
-                 '#55efc4','#fdcb6e','#e17055','#6c5ce7','#00cec9'];
+  const cList = ['#e63946','#d62828','#c1121f','#ef233c','#ff6b6b',
+                 '#b5179e','#f72585','#ee5a24','#f72585','#ffd93d'];
   pts.forEach(([x,y])=>{
-    const c=cList[randI(0,cList.length)];
+    const c=Math.random()<0.5
+      ? RED_COLORS[randI(0,RED_COLORS.length)]
+      : cList[randI(0,cList.length)];
     particles.push(new Particle(x,y,c));
   });
 }
@@ -425,11 +436,11 @@ function startGather(){
   if(targetPts.length>shuffled.length){
     for(let i=shuffled.length;i<targetPts.length;i++){
       const [tx,ty]=targetPts[i];
-      const p=new Particle(rand(0,W),rand(0,H),COLORS[randI(0,COLORS.length)]);
+      const p=new Particle(rand(0,W),rand(0,H),pickRedDominantColor());
       p.sx=p.x;p.sy=p.y;
       p.tx=tx;p.ty=ty;
       p.state='gather';p.gatherT=0;
-      p.colorTarget=COLORS[randI(0,COLORS.length)];
+      p.colorTarget=pickRedDominantColor();
       particles.push(p);
     }
   }
@@ -447,13 +458,13 @@ function loop(){
   requestAnimationFrame(loop);
 
   if(phase==='idle'){
-    ctx.fillStyle='rgba(6,6,26,1)';
+    ctx.fillStyle='rgba(255,255,255,1)';
     ctx.fillRect(0,0,W,H);
     drawMain();
     return;
   }
 
-  ctx.fillStyle='rgba(6,6,26,0.18)';
+  ctx.fillStyle='rgba(255,255,255,0.2)';
   ctx.fillRect(0,0,W,H);
 
   if(fireworksActive){
