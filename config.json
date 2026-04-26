@@ -1,7 +1,7 @@
 {
   "mainText": "莎",
   "revealText": "五一出去玩吗",
-  "maxParticles": 7000,
+  "maxParticles": 3000,
   "redRatio": 0.3,
   "burstSpeed": 18,
   "gatherSpeed": 0.025,
