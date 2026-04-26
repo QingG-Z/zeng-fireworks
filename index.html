@@ -30,9 +30,12 @@ canvas{position:fixed;top:0;left:0;width:100%;height:100%;}
 //  配置加载
 // ============================================================
 const CONFIG = {
-  mainText:   '莎',
-  revealText: '五一出去玩吗',
-  maxParticles: 2200
+  mainText:      '莎',
+  revealText:    '五一出去玩吗',
+  maxParticles:  2200,
+  redRatio:      0.3,
+  burstSpeed:    18,
+  gatherSpeed:   0.025
 };
 const hintEl = document.getElementById('hint');
 hintEl.textContent = `双击「${CONFIG.mainText}」字触发特效`;
@@ -43,6 +46,9 @@ fetch('config.json?t=' + Date.now())
     CONFIG.mainText      = data.mainText      || CONFIG.mainText;
     CONFIG.revealText    = data.revealText    || CONFIG.revealText;
     CONFIG.maxParticles  = data.maxParticles  || 2200;
+    CONFIG.redRatio      = data.redRatio !== undefined ? data.redRatio : 0.3;
+    CONFIG.burstSpeed    = data.burstSpeed    !== undefined ? data.burstSpeed : 18;
+    CONFIG.gatherSpeed   = data.gatherSpeed   !== undefined ? data.gatherSpeed : 0.025;
     hintEl.textContent = `双击「${CONFIG.mainText}」触发特效`;
     document.title = CONFIG.mainText;
   })
@@ -78,10 +84,10 @@ const COLORS = [
   '#ffd93d','#6bcb77','#4d96ff','#ff922b','#cc5de8',
   '#f06595','#74c0fc','#ffe066','#9980FA','#FDA7DF'
 ];
-// 50% 红色 + 50% 其他颜色
+// 红色比例由 CONFIG.redRatio 控制
 const RED_COLORS = ['#e63946','#d62828','#c1121f','#ef233c','#ff4444','#ff6b6b','#b5179e','#f72585','#ee5a24','#e17055'];
 function pickRedDominantColor(){
-  return Math.random() < 0.5
+  return Math.random() < CONFIG.redRatio
     ? RED_COLORS[randI(0, RED_COLORS.length)]
     : COLORS[randI(0, COLORS.length)];
 }
@@ -136,7 +142,7 @@ class Particle {
     this.color = color;
     this.size  = rand(2.5, 4.5);
     const angle = rand(0, Math.PI*2);
-    const speed = rand(3, 18);
+    const speed = rand(CONFIG.burstSpeed * 0.17, CONFIG.burstSpeed);
     this.vx = Math.cos(angle)*speed;
     this.vy = Math.sin(angle)*speed;
     this.alpha = 1;
@@ -185,7 +191,7 @@ class Particle {
     }
 
     if(this.state==='gather'){
-      this.gatherT = Math.min(this.gatherT+0.025, 1);
+      this.gatherT = Math.min(this.gatherT + CONFIG.gatherSpeed, 1);
       const ease = 1-Math.pow(1-this.gatherT,3);
       this.x = lerp(this.sx, this.tx, ease);
       this.y = lerp(this.sy, this.ty, ease);
@@ -398,7 +404,7 @@ function buildParticlesFromMain(){
   const cList = ['#e63946','#d62828','#c1121f','#ef233c','#ff6b6b',
                  '#b5179e','#f72585','#ee5a24','#f72585','#ffd93d'];
   pts.forEach(([x,y])=>{
-    const c=Math.random()<0.5
+    const c=Math.random()<CONFIG.redRatio
       ? RED_COLORS[randI(0,RED_COLORS.length)]
       : cList[randI(0,cList.length)];
     particles.push(new Particle(x,y,c));
