@@ -31,7 +31,8 @@ canvas{position:fixed;top:0;left:0;width:100%;height:100%;}
 // ============================================================
 const CONFIG = {
   mainText:   '莎',
-  revealText: '五一出去玩吗'
+  revealText: '五一出去玩吗',
+  maxParticles: 2200
 };
 const hintEl = document.getElementById('hint');
 hintEl.textContent = `双击「${CONFIG.mainText}」字触发特效`;
@@ -39,8 +40,9 @@ hintEl.textContent = `双击「${CONFIG.mainText}」字触发特效`;
 fetch('config.json?t=' + Date.now())
   .then(r => r.json())
   .then(data => {
-    CONFIG.mainText   = data.mainText   || CONFIG.mainText;
-    CONFIG.revealText = data.revealText || CONFIG.revealText;
+    CONFIG.mainText      = data.mainText      || CONFIG.mainText;
+    CONFIG.revealText    = data.revealText    || CONFIG.revealText;
+    CONFIG.maxParticles  = data.maxParticles  || 2200;
     hintEl.textContent = `双击「${CONFIG.mainText}」触发特效`;
     document.title = CONFIG.mainText;
   })
@@ -386,10 +388,10 @@ function buildParticlesFromMain(){
   particles = [];
 
   // 稀疏化
-  if(pts.length > 2200){
-    const step = pts.length/2200;
+  if(pts.length > CONFIG.maxParticles){
+    const step = pts.length/CONFIG.maxParticles;
     const arr=[];
-    for(let i=0;i<2200;i++) arr.push(pts[Math.floor(i*step)]);
+    for(let i=0;i<CONFIG.maxParticles;i++) arr.push(pts[Math.floor(i*step)]);
     pts=arr;
   }
 
@@ -414,10 +416,10 @@ function startGather(){
   phase='gather';
 
   let targetPts = sampleText(CONFIG.revealText);
-  if(targetPts.length>2200){
-    const step=targetPts.length/2200;
+  if(targetPts.length>CONFIG.maxParticles){
+    const step=targetPts.length/CONFIG.maxParticles;
     const arr=[];
-    for(let i=0;i<2200;i++) arr.push(targetPts[Math.floor(i*step)]);
+    for(let i=0;i<CONFIG.maxParticles;i++) arr.push(targetPts[Math.floor(i*step)]);
     targetPts=arr;
   }
 
