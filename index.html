@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>曾</title>
+<title>烟花特效</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{
@@ -23,9 +23,29 @@ canvas{position:fixed;top:0;left:0;width:100%;height:100%;}
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hint">双击「曾」字触发特效</div>
+<div id="hint"></div>
 
 <script>
+// ============================================================
+//  配置加载
+// ============================================================
+const CONFIG = {
+  mainText:   '莎',
+  revealText: '五一出去玩吗'
+};
+const hintEl = document.getElementById('hint');
+hintEl.textContent = `双击「${CONFIG.mainText}」字触发特效`;
+
+fetch('config.json?t=' + Date.now())
+  .then(r => r.json())
+  .then(data => {
+    CONFIG.mainText   = data.mainText   || CONFIG.mainText;
+    CONFIG.revealText = data.revealText || CONFIG.revealText;
+    hintEl.textContent = `双击「${CONFIG.mainText}」触发特效`;
+    document.title = CONFIG.mainText;
+  })
+  .catch(() => {});
+
 // ============================================================
 //  全局设置
 // ============================================================
@@ -36,13 +56,13 @@ let H = canvas.height = window.innerHeight;
 window.addEventListener('resize',()=>{
   W = canvas.width  = window.innerWidth;
   H = canvas.height = window.innerHeight;
-  if(phase==='idle') drawZeng();
+  if(phase==='idle') drawMain();
 });
 
 // ============================================================
 //  阶段管理   idle → burst → gather → fireworks
 // ============================================================
-let phase = 'idle';   // idle | burst | gather | fireworks
+let phase = 'idle';
 
 // ============================================================
 //  工具函数
@@ -56,54 +76,38 @@ const COLORS = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b',
                 '#ff9f43','#ee5a24','#0652DD','#9980FA','#FDA7DF'];
 
 // ============================================================
-//  离屏 Canvas 采样文字像素点
+//  离屏 Canvas 采样文字像素点（通用，支持任意文本）
 // ============================================================
-function sampleText(text, fontSize, fontStr){
+function sampleText(text, maxFontSize, fontFamily){
   const oc  = document.createElement('canvas');
-  const gap = 8; // 采样间距（越小粒子越多）
   oc.width  = W;
   oc.height = H;
   const ox = oc.getContext('2d');
+
+  // 根据文字长度自动适配字号
+  const charCount = text.length;
+  let fs;
+  if(charCount <= 2){
+    fs = maxFontSize || Math.min(W,H)*0.45;
+  } else {
+    // 多字时根据字数缩减字号，保证不超出屏幕
+    fs = Math.min(W * 0.75 / charCount, H * 0.35, maxFontSize || Math.min(W,H)*0.45);
+  }
+  fs = Math.max(20, fs);
+
   ox.clearRect(0,0,W,H);
   ox.fillStyle = '#fff';
-  ox.font      = fontStr || `900 ${fontSize}px "Arial Black","Impact",sans-serif`;
+  ox.font      = `900 ${fs}px ${fontFamily || '"Arial Black","华文圆体","Microsoft YaHei",sans-serif'}`;
   ox.textAlign    = 'center';
   ox.textBaseline = 'middle';
   ox.fillText(text, W/2, H/2);
-  const data   = ox.getImageData(0,0,W,H).data;
-  const points = [];
-  for(let y=0;y<H;y+=gap){
-    for(let x=0;x<W;x+=gap){
-      const idx = (y*W+x)*4;
-      if(data[idx+3]>128) points.push([x,y]);
-    }
-  }
-  return points;
-}
 
-// 采样"曾"字 & "666"字
-function sampleZeng(){ return sampleText('曾', Math.min(W,H)*0.45, `900 ${Math.min(W,H)*0.45}px "Arial Black","华文圆体","Microsoft YaHei",sans-serif`); }
-function sample666(){
-  // 分三列采样三个"6"
-  const oc  = document.createElement('canvas');
-  oc.width  = W; oc.height = H;
-  const ox  = oc.getContext('2d');
-  const fs  = Math.min(W/4, H*0.4);
-  ox.clearRect(0,0,W,H);
-  ox.fillStyle = '#fff';
-  ox.font      = `900 ${fs}px "Arial Black","Impact",sans-serif`;
-  ox.textAlign    = 'center';
-  ox.textBaseline = 'middle';
-  const spacing = fs * 0.85;
-  ox.fillText('6', W/2 - spacing, H/2);
-  ox.fillText('6', W/2,           H/2);
-  ox.fillText('6', W/2 + spacing, H/2);
   const data   = ox.getImageData(0,0,W,H).data;
   const gap    = 8;
   const points = [];
   for(let y=0;y<H;y+=gap){
     for(let x=0;x<W;x+=gap){
-      const idx=(y*W+x)*4;
+      const idx = (y*W+x)*4;
       if(data[idx+3]>128) points.push([x,y]);
     }
   }
@@ -116,20 +120,19 @@ function sample666(){
 class Particle {
   constructor(x, y, color){
     this.x  = x; this.y  = y;
-    this.ox = x; this.oy = y; // 原始位置（曾字像素）
-    this.tx = x; this.ty = y; // 目标位置（666像素）
+    this.ox = x; this.oy = y;
+    this.tx = x; this.ty = y;
     this.color = color;
     this.size  = rand(2.5, 4.5);
-    // 爆散速度
     const angle = rand(0, Math.PI*2);
     const speed = rand(3, 18);
     this.vx = Math.cos(angle)*speed;
     this.vy = Math.sin(angle)*speed;
     this.alpha = 1;
-    this.state = 'idle'; // idle | burst | gather
+    this.state = 'idle';
     this.gatherT = 0;
-    this.burstX  = x; this.burstY = y; // 爆散后的停留位置
-    this.colorTarget = color; // gather阶段最终颜色
+    this.burstX  = x; this.burstY = y;
+    this.colorTarget = color;
   }
 
   startBurst(){
@@ -142,7 +145,6 @@ class Particle {
     this.gatherTimer = 0;
     this.state  = 'pregather';
     this.tx = tx; this.ty = ty;
-    // gather时换颜色（彩色666）
     this.colorTarget = COLORS[randI(0,COLORS.length)];
   }
 
@@ -152,13 +154,11 @@ class Particle {
     if(this.state==='burst'){
       this.vx *= 0.93;
       this.vy *= 0.93;
-      this.vy += 0.18; // 微重力
+      this.vy += 0.18;
       this.x += this.vx;
       this.y += this.vy;
-      // 边界反弹阻尼
       if(this.x<0||this.x>W){ this.vx*=-0.5; this.x=Math.max(0,Math.min(W,this.x)); }
       if(this.y>H){ this.vy*=-0.4; this.y=H; }
-      // 速度足够小时记录停留
       if(Math.abs(this.vx)<0.3 && Math.abs(this.vy)<0.3){
         this.burstX=this.x; this.burstY=this.y;
       }
@@ -169,14 +169,13 @@ class Particle {
       if(this.gatherTimer>=this.gatherDelay){
         this.state='gather';
         this.gatherT=0;
-        // 记录当前scatter位置作为起始点
         this.sx=this.x; this.sy=this.y;
       }
     }
 
     if(this.state==='gather'){
       this.gatherT = Math.min(this.gatherT+0.025, 1);
-      const ease = 1-Math.pow(1-this.gatherT,3); // easeOutCubic
+      const ease = 1-Math.pow(1-this.gatherT,3);
       this.x = lerp(this.sx, this.tx, ease);
       this.y = lerp(this.sy, this.ty, ease);
       this.alpha = lerp(0.6, 1, ease);
@@ -275,15 +274,23 @@ const sparks=[];
 const shells=[];
 
 // ============================================================
-//  心跳动画（idle状态下在canvas上绘制「曾」字）
+//  心跳动画（idle状态下绘制主文字）
 // ============================================================
 let heartT=0;
-let zengPoints=[];
 
-function drawZeng(){
-  // 清空后绘制大号气球风格「曾」字
+function drawMain(){
+  const text = CONFIG.mainText;
   ctx.clearRect(0,0,W,H);
-  const fs = Math.min(W,H)*0.45;
+
+  // 根据文字长度自适应字号
+  const charCount = text.length;
+  let fs;
+  if(charCount <= 2){
+    fs = Math.min(W,H)*0.45;
+  } else {
+    fs = Math.min(W * 0.75 / charCount, H * 0.35);
+  }
+  fs = Math.max(20, fs);
 
   // 心跳缩放
   heartT += 0.03;
@@ -295,22 +302,22 @@ function drawZeng(){
   ctx.scale(beat, beat);
   ctx.translate(-W/2, -H/2);
 
-  // --- 充气气球感：多层描边 + 渐变填充 ---
-  ctx.font = `900 ${fs}px "Arial Black","华文圆体","Microsoft YaHei",sans-serif`;
+  const fontStr = `900 ${fs}px "Arial Black","华文圆体","Microsoft YaHei",sans-serif`;
+  ctx.font = fontStr;
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
 
-  // 最外层白色光晕
+  // 最外层光晕
   ctx.save();
   ctx.shadowBlur  = 60;
   ctx.shadowColor = 'rgba(200,150,255,0.6)';
   ctx.lineWidth   = fs*0.18;
   ctx.strokeStyle = 'rgba(255,255,255,0.12)';
   ctx.lineJoin    = 'round';
-  ctx.strokeText('曾', W/2, H/2);
+  ctx.strokeText(text, W/2, H/2);
   ctx.restore();
 
-  // 充气轮廓（多圈描边模拟膨胀）
+  // 充气轮廓
   for(let i=5;i>=1;i--){
     ctx.save();
     ctx.lineWidth   = fs*0.08*i;
@@ -320,7 +327,7 @@ function drawZeng(){
     ctx.strokeStyle = `rgba(${r},${g},${b},${0.05+i*0.04})`;
     ctx.shadowBlur  = 20*i;
     ctx.shadowColor = `rgba(180,100,255,0.3)`;
-    ctx.strokeText('曾', W/2, H/2);
+    ctx.strokeText(text, W/2, H/2);
     ctx.restore();
   }
 
@@ -335,10 +342,10 @@ function drawZeng(){
   ctx.fillStyle = grad;
   ctx.shadowBlur  = 30;
   ctx.shadowColor = 'rgba(255,180,255,0.8)';
-  ctx.fillText('曾', W/2, H/2);
+  ctx.fillText(text, W/2, H/2);
   ctx.restore();
 
-  // 高光（左上角白斑，模拟气球反光）
+  // 高光
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   const hl = ctx.createRadialGradient(
@@ -353,32 +360,30 @@ function drawZeng(){
   ctx.fill();
   ctx.restore();
 
-  ctx.restore(); // beat scale
+  ctx.restore();
 }
 
 // ============================================================
 //  粒子集合 & 主逻辑
 // ============================================================
 let particles = [];
-let gatherDone = false;
 let fireworksActive = false;
 let fireworksTimer  = 0;
-const FIREWORKS_DURATION = 300; // 帧数
+const FIREWORKS_DURATION = 300;
 
-function buildParticlesFromZeng(){
-  zengPoints = sampleZeng();
-  particles  = [];
-  // 为每个采样点建一个粒子
-  // 若点太多，稀疏化
-  let pts = zengPoints;
+function buildParticlesFromMain(){
+  const text = CONFIG.mainText;
+  let pts = sampleText(text);
+  particles = [];
+
+  // 稀疏化
   if(pts.length > 2200){
-    // 均匀抽样2200
     const step = pts.length/2200;
     const arr=[];
     for(let i=0;i<2200;i++) arr.push(pts[Math.floor(i*step)]);
     pts=arr;
-    zengPoints=arr;
   }
+
   const cList = ['#ff9ff3','#ffeaa7','#a29bfe','#fd79a8','#74b9ff',
                  '#55efc4','#fdcb6e','#e17055','#6c5ce7','#00cec9'];
   pts.forEach(([x,y])=>{
@@ -389,19 +394,15 @@ function buildParticlesFromZeng(){
 
 function startBurst(){
   phase='burst';
-  document.getElementById('hint').style.opacity='0';
+  hintEl.style.opacity='0';
   particles.forEach(p=>p.startBurst());
-
-  // 3秒后开始gather到666
   setTimeout(startGather, 2200);
 }
 
 function startGather(){
   phase='gather';
-  gatherDone=false;
 
-  // 采样666的像素点
-  let targetPts = sample666();
+  let targetPts = sampleText(CONFIG.revealText);
   if(targetPts.length>2200){
     const step=targetPts.length/2200;
     const arr=[];
@@ -409,25 +410,21 @@ function startGather(){
     targetPts=arr;
   }
 
-  // 打乱粒子顺序，随机分配到666像素
   const shuffled=[...particles].sort(()=>Math.random()-0.5);
-  const n=Math.min(shuffled.length,targetPts.length);
 
   for(let i=0;i<shuffled.length;i++){
     if(i<targetPts.length){
       const [tx,ty]=targetPts[i%targetPts.length];
       shuffled[i].startGather(tx, ty, randI(0,60));
     } else {
-      // 多余粒子淡出
       shuffled[i].alpha=0;
       shuffled[i].state='dead';
     }
   }
-  // 不够用的点（粒子少于目标点），补充新粒子
+
   if(targetPts.length>shuffled.length){
     for(let i=shuffled.length;i<targetPts.length;i++){
       const [tx,ty]=targetPts[i];
-      // 从屏幕随机位置飞入
       const p=new Particle(rand(0,W),rand(0,H),COLORS[randI(0,COLORS.length)]);
       p.sx=p.x;p.sy=p.y;
       p.tx=tx;p.ty=ty;
@@ -437,7 +434,6 @@ function startGather(){
     }
   }
 
-  // 1.5s后启动烟花
   setTimeout(()=>{
     fireworksActive=true;
     fireworksTimer=0;
@@ -451,18 +447,15 @@ function loop(){
   requestAnimationFrame(loop);
 
   if(phase==='idle'){
-    // 背景
     ctx.fillStyle='rgba(6,6,26,1)';
     ctx.fillRect(0,0,W,H);
-    drawZeng();
+    drawMain();
     return;
   }
 
-  // 拖尾背景
   ctx.fillStyle='rgba(6,6,26,0.18)';
   ctx.fillRect(0,0,W,H);
 
-  // 烟花
   if(fireworksActive){
     fireworksTimer++;
     if(fireworksTimer < FIREWORKS_DURATION){
@@ -483,7 +476,6 @@ function loop(){
     if(sparks[i].alpha<=0) sparks.splice(i,1);
   }
 
-  // 粒子
   particles.forEach(p=>{ p.update(); p.draw(); });
 }
 loop();
@@ -493,15 +485,12 @@ loop();
 // ============================================================
 canvas.addEventListener('dblclick', e=>{
   if(phase!=='idle') return;
-  // 检测是否点击在「曾」字范围内（用zengPoints判断）
-  buildParticlesFromZeng();
+  buildParticlesFromMain();
   startBurst();
 });
 
-// 点击提示
 canvas.addEventListener('click',e=>{
   if(phase!=='idle') return;
-  // 单击轻微弹跳
   heartT += 1.5;
 });
 </script>
